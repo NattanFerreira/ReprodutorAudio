@@ -3,13 +3,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FaBackward, FaForward, FaPauseCircle, FaPlayCircle, FaStepBackward, FaStepForward } from "react-icons/fa";
-import musics from "./data/musics";
+import videos from "./data/videos";
 
 export default function Home() {
   const [playing, isPlaying] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(1);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [audioIndex, setAudioIndex] = useState<number>(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [videoIndex, setAudioIndex] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [velocity, setVelocity] = useState<number>(1);
@@ -18,7 +19,7 @@ export default function Home() {
     if (playing) {
       play();
     }
-    const audio = audioRef.current;
+    const audio = videoRef.current;
     if (!audio) return;
     audio.onloadedmetadata = () => {
       setDuration(audio.duration);
@@ -29,13 +30,13 @@ export default function Home() {
     }
 
     audio.onended = () => {
-      setAudioIndex(audioIndex + 1);
+      setAudioIndex(videoIndex + 1);
     }
-  }, [audioIndex])
+  }, [videoIndex])
 
   useEffect(()=>{
     configAudio(0);
-    const audio = audioRef.current;
+    const audio = videoRef.current;
     if (!audio) return;
     setDuration(audio.duration);
   }, []);
@@ -47,15 +48,15 @@ export default function Home() {
   }
 
   const play = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.play();
+    const video = videoRef.current;
+    if (!video) return;
+    video.play();
   }
 
   const pause = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
   }
 
   const playPause = () => {
@@ -64,22 +65,23 @@ export default function Home() {
     }
     else {
       play();
+      draw();
     }
     isPlaying(!playing);
   }
 
   const configVolume = (value: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = value;
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = value;
     setVolume(value);
   }
 
   const configAudio = (index: number) => {
-    if (index >= musics.length) {
+    if (index >= videos.length) {
       index = 0; 
     } else if (index < 0){
-      index = musics.length - 1;
+      index = videos.length - 1;
     }
     setAudioIndex(index);
   }
@@ -89,25 +91,35 @@ export default function Home() {
     if (newVelocity > 3) {
       newVelocity = 1;
     }
-    const audio = audioRef.current;
+    const audio = videoRef.current;
     if (!audio) return;
     audio.playbackRate = newVelocity;
     setVelocity(newVelocity);
   }
 
   const configCurrentTime = (time: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = time;
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = time;
     setCurrentTime(time);
   }
 
+  const draw = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    requestAnimationFrame(draw);
+  }
+
   return (
-    <div className="flex bg-amber-400 w-125 mr-auto ml-auto">
+    <div className="flex bg-amber-400 w-250 mr-auto ml-auto">
       <div>
         <ul>
           {
-            musics.map((music, index) => {
+            videos.map((music, index) => {
               return (
                 <li key={index} onClick={() => configAudio(index)} className="w-50">
                   <h1>{music.nome}</h1>
@@ -118,8 +130,11 @@ export default function Home() {
           }
         </ul>
       </div>
-      <div className="items-center flex flex-col w-50 m-0 mr-auto ml-auto">
-        <audio ref={audioRef} src={musics[audioIndex].url} controls hidden></audio>
+      <div className="mt-5 items-center flex flex-col w-[80%] m-0 mr-auto ml-auto">
+        <canvas ref={canvasRef} className="w-[80%] bg-pink-500">
+
+        </canvas>
+        <video className="w-[80%]" ref={videoRef} src={videos[videoIndex].url} hidden></video>
         <button onClick={() => playPause()} >
           {
             playing ? <FaPauseCircle /> : <FaPlayCircle />
@@ -154,23 +169,17 @@ export default function Home() {
           </button>
         </div>
         <div>
-          <button onClick={()=> configAudio(audioIndex - 1)} className="mr-4">
+          <button onClick={()=> configAudio(videoIndex - 1)} className="mr-4">
                 <FaStepBackward />
           </button>
 
-          <button onClick={() => configAudio(audioIndex + 1)}>
+          <button onClick={() => configAudio(videoIndex + 1)}>
             <FaStepForward />
           </button>
 
           <button onClick={() => configVelocity(velocity + 0.5)} className="bg-blue-500 rounded-[360px] w-6">
             {velocity}
           </button>
-        </div>
-        <div>
-          <div className="w-50">
-                  <h1>{musics[audioIndex].nome}</h1>
-                  <img src={musics[audioIndex].imagem} alt={"Imagem da música " + musics[audioIndex].nome} />
-                </div>
         </div>
       </div>
     </div>
