@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useRef, useState } from "react";
@@ -16,33 +15,36 @@ export default function Home() {
   const [velocity, setVelocity] = useState<number>(1);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.onloadedmetadata = () => {
+      setDuration(video.duration);
+      video.playbackRate = velocity;
+    };
+
+    video.ontimeupdate = () => {
+      setCurrentTime(video.currentTime);
+    };
+
+    video.onended = () => {
+      configAudio(videoIndex + 1);
+    };
+
     if (playing) {
-      play();
+      video.play().then(() => {
+        draw();
+      }).catch((err) => console.error(err));
     }
-    const audio = videoRef.current;
-    if (!audio) return;
-    audio.onloadedmetadata = () => {
-      setDuration(audio.duration);
-    }
+  }, [videoIndex]);
 
-    audio.ontimeupdate = () => {
-      setCurrentTime(audio.currentTime);
-    }
-
-    audio.onended = () => {
-      setAudioIndex(videoIndex + 1);
-    }
-  }, [videoIndex])
-
-  useEffect(()=>{
+  useEffect(() => {
     configAudio(0);
-    const audio = videoRef.current;
-    if (!audio) return;
-    setDuration(audio.duration);
   }, []);
 
   const formatTime = (time: number) => {
-    const minutes = Math.trunc(time/60);
+    if (isNaN(time)) return "00:00";
+    const minutes = Math.trunc(time / 60);
     const seconds = Math.trunc(time % 60);
     return ("0" + minutes).slice(-2) + ":" + ("0" + seconds).slice(-2);
   }
@@ -51,6 +53,7 @@ export default function Home() {
     const video = videoRef.current;
     if (!video) return;
     video.play();
+    draw();
   }
 
   const pause = () => {
@@ -62,10 +65,8 @@ export default function Home() {
   const playPause = () => {
     if (playing) {
       pause();
-    }
-    else {
+    } else {
       play();
-      draw();
     }
     isPlaying(!playing);
   }
@@ -78,12 +79,13 @@ export default function Home() {
   }
 
   const configAudio = (index: number) => {
-    if (index >= videos.length) {
-      index = 0; 
-    } else if (index < 0){
-      index = videos.length - 1;
+    let targetIndex = index;
+    if (targetIndex >= videos.length) {
+      targetIndex = 0; 
+    } else if (targetIndex < 0) {
+      targetIndex = videos.length - 1;
     }
-    setAudioIndex(index);
+    setAudioIndex(targetIndex);
   }
 
   const configVelocity = (number: number) => {
@@ -100,14 +102,19 @@ export default function Home() {
   const configCurrentTime = (time: number) => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = time;
-    setCurrentTime(time);
+    
+    let targetTime = time;
+    if (targetTime < 0) targetTime = 0;
+    if (targetTime > duration) targetTime = duration;
+
+    video.currentTime = targetTime;
+    setCurrentTime(targetTime);
   }
 
   const draw = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    if (!video || !canvas || video.paused || video.ended) return;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -115,71 +122,105 @@ export default function Home() {
   }
 
   return (
-    <div className="flex bg-amber-400 w-250 mr-auto ml-auto">
-      <div>
-        <ul>
+    <div className="flex bg-slate-900 text-white min-h-screen w-full max-w-5xl mx-auto rounded-lg shadow-xl overflow-hidden my-5">
+      <div className="w-1/3 bg-slate-800 p-4 border-r border-slate-700 overflow-y-auto max-h-[600px]">
+        <h2 className="text-xl font-bold mb-4 border-b border-slate-700 pb-2 text-amber-400">Playlist</h2>
+        <ul className="space-y-2">
           {
             videos.map((music, index) => {
+              const isCurrent = index === videoIndex;
               return (
-                <li key={index} onClick={() => configAudio(index)} className="w-50">
-                  <h1>{music.nome}</h1>
-                  <img src={music.imagem} alt={"Imagem da música " + music.nome} />
+                <li 
+                  key={index} 
+                  onClick={() => configAudio(index)} 
+                  className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                    isCurrent ? 'bg-amber-500 text-slate-900 font-bold scale-[1.02] shadow-md' : 'hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  <img src={music.imagem} alt={music.nome} className="w-12 h-12 object-cover rounded shadow" />
+                  <div className="truncate">
+                    <h1 className="text-sm truncate">{music.nome}</h1>
+                    <span className="text-xs opacity-75">{isCurrent ? "Tocando agora" : "Faixa"}</span>
+                  </div>
                 </li>
               )
             })
           }
         </ul>
       </div>
-      <div className="mt-5 items-center flex flex-col w-[80%] m-0 mr-auto ml-auto">
-        <canvas ref={canvasRef} className="w-[80%] bg-pink-500">
 
-        </canvas>
-        <video className="w-[80%]" ref={videoRef} src={videos[videoIndex].url} hidden></video>
-        <button onClick={() => playPause()} >
-          {
-            playing ? <FaPauseCircle /> : <FaPlayCircle />
-          }
-        </button>
-        <input type="range"
-          min={0}
-          max={1}
-          step={0.001}
-          value={volume}
-          onChange={(e) => configVolume(Number(e.target.value))}
-        />
-        <div className="flex">
-          <p>{formatTime(currentTime)}</p>
+      <div className="w-2/3 p-6 flex flex-col items-center justify-between bg-slate-850">
+        <div className="w-full flex justify-center mb-4 relative aspect-video bg-black rounded-lg overflow-hidden shadow-inner">
+          <canvas ref={canvasRef} width={640} height={360} className="w-full h-full object-contain"></canvas>
+        </div>
+
+        <video ref={videoRef} src={videos[videoIndex].url} hidden></video>
+
+        <div className="text-center mb-4">
+          <h3 className="text-lg font-semibold text-amber-400">{videos[videoIndex].nome}</h3>
+        </div>
+
+        <div className="w-full flex items-center justify-between gap-4 px-2 mb-4">
+          <span className="text-xs font-mono text-slate-400 w-10 text-right">{formatTime(currentTime)}</span>
           <input 
             type="range"
             min={0}
-            step={0.001}
-            max={duration}
+            step={0.1}
+            max={duration || 100}
             value={currentTime}
             onChange={(e) => configCurrentTime(Number(e.target.value))}
+            className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
           />
-          <p>{formatTime(duration)}</p>
+          <span className="text-xs font-mono text-slate-400 w-10">{formatTime(duration)}</span>
         </div>
-        <div>
-          <button className="mr-4" onClick={()=>configCurrentTime(currentTime - 10)}>
-            <FaBackward />
-          </button>
 
-          <button onClick={() => configCurrentTime(currentTime + 10)}>
-             <FaForward />
-          </button>
-        </div>
-        <div>
-          <button onClick={()=> configAudio(videoIndex - 1)} className="mr-4">
-                <FaStepBackward />
-          </button>
+        <div className="flex flex-col items-center gap-4 w-full">
+          <div className="flex items-center gap-6">
+            <button onClick={() => configAudio(videoIndex - 1)} className="text-xl hover:text-amber-400 transition-colors">
+              <FaStepBackward />
+            </button>
 
-          <button onClick={() => configAudio(videoIndex + 1)}>
-            <FaStepForward />
-          </button>
+            <button onClick={() => configCurrentTime(currentTime - 10)} className="text-xl hover:text-amber-400 transition-colors">
+              <FaBackward />
+            </button>
 
-          <button onClick={() => configVelocity(velocity + 0.5)} className="bg-blue-500 rounded-[360px] w-6">
-            {velocity}
-          </button>
+            <button onClick={playPause} className="text-5xl text-amber-400 hover:scale-105 active:scale-95 transition-transform">
+              {playing ? <FaPauseCircle /> : <FaPlayCircle />}
+            </button>
+
+            <button onClick={() => configCurrentTime(currentTime + 10)} className="text-xl hover:text-amber-400 transition-colors">
+              <FaForward />
+            </button>
+
+            <button onClick={() => configAudio(videoIndex + 1)} className="text-xl hover:text-amber-400 transition-colors">
+              <FaStepForward />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between w-full mt-2 border-t border-slate-700 pt-4 px-4">
+            <div className="flex items-center gap-2 w-1/3">
+              <span className="text-xs text-slate-400">🔊</span>
+              <input 
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => configVolume(Number(e.target.value))}
+                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Velocidade:</span>
+              <button 
+                onClick={() => configVelocity(velocity === 3 ? 1 : velocity + 0.5)} 
+                className="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-xs py-1 px-3 rounded-full transition-colors min-w-[45px]"
+              >
+                {velocity}x
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
